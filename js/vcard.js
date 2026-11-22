@@ -55,7 +55,8 @@ export function buildNote(c, eventName) {
 function normalizeUrl(u) {
   u = (u || '').trim();
   if (!u) return '';
-  if (/^[a-z][a-z0-9+.-]*:/i.test(u)) return u;
+  // Güvenlik: sadece http/https bağlantılarına izin ver (javascript:, data: vb. engellenir)
+  if (/^[a-z][a-z0-9+.-]*:/i.test(u) && !/^[a-z0-9.-]+:\d+/i.test(u)) return /^https?:\/\//i.test(u) ? u : '';
   return 'https://' + u.replace(/^\/+/, '');
 }
 export { normalizeUrl };
@@ -63,6 +64,7 @@ export { normalizeUrl };
 export function linkedinUrl(v) {
   v = (v || '').trim();
   if (!v) return '';
+  if (/^[a-z][a-z0-9+.-]*:/i.test(v) && !/^https?:\/\//i.test(v)) return '';
   if (/linkedin\.com/i.test(v)) return normalizeUrl(v);
   // sadece kullanıcı adı yazıldıysa
   return 'https://www.linkedin.com/in/' + v.replace(/^@/, '').replace(/^\/+|\/+$/g, '');

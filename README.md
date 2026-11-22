@@ -54,6 +54,14 @@ GitHub Pages ayarı GitHub'ın güvenlik kuralları gereği sadece depo sahibi t
 - **Kartvizit Fotoğrafı**: Kâğıt kartvizitin fotoğrafını çekin; Türkçe ve İngilizce metin telefonda okunur, ad, unvan, şirket, telefon, e-posta ve web alanları tahmin edilir. Kaydetmeden önce alanları kontrol edip düzeltin. Kartın fotoğrafı kişinin kaydında saklanır. (İlk kullanımda OCR motorunun açılması 10–30 saniye sürebilir.)
 - **Hızlı Giriş**: Sadece ad ve telefon/e-posta yazıp **Kaydet**.
 
+### Bir kişinin kartını başkasıyla paylaşma
+Kişi kartını açın ve **Bu kişiyi başkasıyla paylaş** bölümünü kullanın:
+- **▦ QR kod olarak göster**: Karşı taraf kamerasıyla okutup kişiyi rehberine kaydeder.
+- **💬 WhatsApp / AirDrop / Mesajlar (vCard)**: Paylaşım menüsü açılır; **WhatsApp**'ı seçip alıcıyı seçin. Kişi, WhatsApp'ta kartvizit (.vcf) olarak gider.
+- **💬 WhatsApp'ta metin olarak gönder**: WhatsApp açılır; alıcıyı seçince iletişim bilgileri metin olarak gönderilir.
+
+Paylaşılan kartta **sadece iletişim bilgileri** bulunur. Kendi notlarınız, etiketler, öncelik ve etkinlik bilgisi **asla gönderilmez**.
+
 ### Etkinlik ve takip
 - **Etkinlik** sekmesinde etkinlik oluşturup **aktif** yapın. Aktifken kaydettiğiniz herkes otomatik olarak o etkinliğe bağlanır (üst köşede yeşil etkinlik adı görünür).
 - Her kişiye etiket (Müşteri, Tedarikçi, İş ortağı, Aday…), öncelik, not ve **takip hatırlatması** (X gün sonra dönüş) eklenebilir.
@@ -100,7 +108,28 @@ Kişi ekranı açılmazsa çıkan soruda **"Kişi ekranı açılmadı — payla�
 
 > Uygulamayı ana ekrandan silerseniz veya iPhone "Safari geçmişini ve verilerini temizle" yaparsanız veriler silinebilir. Düzenli yedek alın.
 
-## 7. Güvenlik
+## 7. Gizlilik ve veri güvenliği
+
+**Uygulama hiçbir sunucuya veri göndermez.** GitHub Pages sadece uygulama dosyalarını (HTML, JS, simgeler, OCR dil dosyaları) telefona indirir; bu, bir web sayfasını açmakla aynıdır. Girdiğiniz bilgiler ve kişiler telefonunuzdaki IndexedDB deposunda kalır. GitHub'a, Claude'a, Anthropic'e veya başka bir yere gitmez.
+
+Teknik önlemler:
+- Sayfada **İçerik Güvenlik Politikası (CSP)** var: tarayıcı, uygulamanın kendi adresi dışındaki hiçbir adrese bağlantı kurulmasına izin vermez (`connect-src 'self'`).
+- Analitik, reklam, çerez, yazı tipi servisi veya CDN yoktur. Bütün kütüphaneler repoya dahildir. OCR kütüphanesindeki varsayılan CDN adresleri koddan çıkarılmıştır.
+- Kişiler'e ekleme ve takvim için oluşturulan geçici dosyalar telefonda tutulur, adlarında kişi adı yer almaz ve 2 dakika içinde silinir.
+- QR koddan gelen içerik güvenli işlenir: kod enjeksiyonu (XSS), `javascript:` bağlantıları ve e-posta başlığı enjeksiyonu engellenir. CSV dışa aktarmada Excel formül enjeksiyonu engellenir.
+- Otomatik testler, tarayıcının dışarıya yaptığı her isteği kaydeden bir düzenekle çalışır. Tüm akışlarda (QR, OCR, kamera, Kişiler'e ekleme, yedekleme) **sıfır dış istek** ve sunucuya **sıfır veri gönderimi** doğrulanmıştır (`tests/e2e.cjs`).
+
+Veri telefondan **yalnızca sizin dokunuşunuzla** çıkar:
+- Paylaş / WhatsApp / AirDrop ile birine kart gönderdiğinizde,
+- **Kişiler'e ekle** dediğinizde: iCloud Kişiler açıksa Apple bunları iCloud'a eşitler (iPhone Ayarlar → [adınız] → iCloud → Kişiler),
+- **Yedek al** dediğinizde: iCloud Drive'a kaydederseniz yedek Apple'ın bulutuna gider. Sadece telefonda kalsın istiyorsanız **Dosyalar → iPhone'umda** klasörünü seçin,
+- Ara / e-posta / WhatsApp / LinkedIn düğmelerine dokunduğunuzda (ilgili uygulama açılır).
+
+Bilinmesi gerekenler:
+- iPhone'un kendi iCloud yedeği açıksa, Apple tüm telefonu yedeklerken uygulama verileri de bu yedeğe girebilir (şifreli Apple yedeği).
+- Uygulama kodu GitHub'dan yüklendiği için GitHub hesabınızın güvenliği önemlidir. GitHub hesabınızda **iki adımlı doğrulamayı (2FA)** açın. Kodu sadece siz (ya da sizin isteğinizle Claude) değiştirebilirsiniz.
+
+## 8. Güvenlik (PIN ve sıfırlama)
 
 - **Ayarlar → 🔒 4 haneli PIN kilidi**: Kişiler, etkinlikler ve ayarlar için PIN istenir. Kendi QR kodunuz ve kartınızı paylaşma PIN'siz çalışır. Uygulama 1 dakikadan uzun arka planda kalırsa yeniden kilitlenir.
   PIN bir ekran kilididir; telefonun kendi kilidi ve Face ID'si asıl korumadır.

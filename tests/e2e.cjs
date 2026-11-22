@@ -9,7 +9,12 @@ const os = require('os');
 const ROOT = path.resolve(__dirname, '..');
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'kv-'));
 const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.png': 'image/png', '.svg': 'image/svg+xml', '.gz': 'application/gzip' };
+// Güvenlik testi: uygulama sunucusuna gelen her istek kaydedilir
+const serverLog = [];
 const server = http.createServer((req, res) => {
+  let body = 0;
+  req.on('data', c => { body += c.length; });
+  req.on('end', () => serverLog.push({ method: req.method, url: req.url, body }));
   let p = decodeURIComponent(req.url.split('?')[0]);
   if (p.endsWith('/')) p += 'index.html';
   const f = path.join(ROOT, p);
@@ -17,6 +22,12 @@ const server = http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': types[path.extname(f)] || 'application/octet-stream' });
   fs.createReadStream(f).pipe(res);
 });
+
+// Güvenlik testi: tarayıcının dış dünyaya yaptığı HER istek bu sahte proxy'den geçer ve kaydedilir
+const externalLog = [];
+const net = require('net');
+const proxy = http.createServer((req, res) => { externalLog.push(`${req.method} ${req.url}`); res.writeHead(403); res.end(); });
+proxy.on('connect', (req, sock) => { externalLog.push(`CONNECT ${req.url}`); sock.end('HTTP/1.1 403 Forbidden\r\n\r\n'); });
 
 let passed = 0;
 const results = [];
@@ -57,11 +68,12 @@ async function makeImages(browser) {
 
 (async () => {
   await new Promise(r => server.listen(8765, r));
+  await new Promise(r => proxy.listen(8899, r));
   const pre = await chromium.launch();
   await makeImages(pre);
   await pre.close();
 
-  const browser = await chromium.launch({ args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', `--use-file-for-fake-video-capture=${path.join(TMP, 'qr.mjpeg')}`] });
+  const browser = await chromium.launch({ args: ['--proxy-server=http://127.0.0.1:8899', '--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', `--use-file-for-fake-video-capture=${path.join(TMP, 'qr.mjpeg')}`] });
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, acceptDownloads: true, permissions: ['camera'], locale: 'tr-TR' });
   const page = await ctx.newPage();
   const errors = [];
@@ -236,6 +248,29 @@ async function makeImages(browser) {
   const href = await page.evaluate(() => document.querySelector('[data-sheet^="contact:"] a.action[href^="https://wa.me/"]').href);
   ok(href === 'https://wa.me/905551112233', 'WhatsApp bağlantısı doğru numarayla');
 
+  // ---- Başka bir kişinin kartını paylaşma ----
+  await page.click('[data-act="qr-contact"]');
+  await page.waitForSelector('.qr-full svg');
+  const cq = await page.evaluate(async () => {
+    const img = new Image();
+    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(document.querySelector('#qrBox svg').outerHTML);
+    await img.decode();
+    const c = document.createElement('canvas'); c.width = c.height = 600;
+    const x = c.getContext('2d'); x.drawImage(img, 0, 0, 600, 600);
+    return jsQR(x.getImageData(0, 0, 600, 600).data, 600, 600).data;
+  });
+  ok(cq.includes('N:Kılıç;Gülşen;;;') && cq.includes('TEL;TYPE=CELL,VOICE:+905551112233'), 'Başka kişinin kartı QR olarak gösteriliyor ve okunabiliyor');
+  ok(!/NOTE|Tanışma|demo|Müşteri/.test(cq), 'Paylaşılan QR\'da özel not, etiket ve etkinlik bilgisi YOK');
+  await page.click('.qr-full');
+  const [dlS] = await Promise.all([page.waitForEvent('download'), page.click('[data-act="share-contact"]')]);
+  const sv = fs.readFileSync(await dlS.path(), 'utf8');
+  ok(sv.includes('N:Kılıç;Gülşen;;;') && !/NOTE|Tanışma|demo/.test(sv), 'WhatsApp/AirDrop için paylaşılan vCard\'da özel not YOK');
+  await page.evaluate(() => { window.__opened = []; window.open = u => { window.__opened.push(u); return null; }; });
+  await page.click('[data-act="wa-text-contact"]');
+  const wurl = await page.evaluate(() => window.__opened[0]);
+  const wtext = decodeURIComponent(wurl.split('text=')[1]);
+  ok(wurl.startsWith('https://wa.me/?text=') && wtext.includes('Gülşen Kılıç') && wtext.includes('+905551112233') && !/demo|Tanışma/.test(wtext), 'WhatsApp metin paylaşımı: sadece iletişim bilgileri');
+
   // ---- Yedekleme ----
   await page.evaluate(() => document.querySelectorAll('#layers .layer').forEach(l => l.remove()));
   await page.click('.tab[data-view="settings"]');
@@ -292,11 +327,51 @@ async function makeImages(browser) {
   ok(ocrCached, 'OCR dil dosyaları çevrimdışı kullanım için önbellekte');
   await ctx.setOffline(false);
 
+  // ---- XSS: zararlı QR içeriği çalıştırılamaz ----
+  await page.click('.tab[data-view="contacts"]');
+  await page.waitForSelector('.pin');
+  for (const k of '1234') await page.click(`.pin [data-k="${k}"]`);
+  await page.waitForSelector('#contactList li');
+  await page.evaluate(() => window.__kartvizit.handleQRText('BEGIN:VCARD\nVERSION:3.0\nN:<img src=x onerror="window.__xss=1">;"><script>window.__xss=2</script>\nORG:<svg onload="window.__xss=3">\nURL:javascript:window.__xss=4\nX-SOCIALPROFILE;TYPE=linkedin:javascript:window.__xss=5\nEMAIL:a@b.com?bcc=kotu@x.com\nEND:VCARD'));
+  await page.waitForSelector('[data-sheet="cform"]');
+  await page.click('[data-act="save-contact"]');
+  await page.waitForSelector('.dialog');
+  await page.click('.dialog button:has-text("Şimdi değil")');
+  await page.waitForSelector('[data-sheet^="contact:"]');
+  const hrefs = await page.evaluate(() => [...document.querySelectorAll('[data-sheet^="contact:"] a')].map(a => a.getAttribute('href')));
+  await page.evaluate(() => document.querySelectorAll('#layers .layer').forEach(l => l.remove()));
+  await page.click('.tab[data-view="card"]'); await page.click('.tab[data-view="contacts"]');
+  await page.waitForTimeout(300);
+  ok(await page.evaluate(() => window.__xss) === undefined && !hrefs.some(h => /javascript:|bcc=/i.test(h || '')), 'Zararlı QR (XSS / javascript: bağlantısı / e-posta enjeksiyonu) çalıştırılamadı');
+
+  // ---- Güvenlik / sızma kontrolleri ----
+  ok(externalLog.length === 0, 'Tüm testler boyunca uygulama dış dünyaya TEK BİR istek bile yapmadı (OCR, QR, kamera dahil)' + (externalLog.length ? ': ' + externalLog.join(', ') : ''));
+  const nonGet = serverLog.filter(r => r.method !== 'GET' || r.body > 0);
+  ok(nonGet.length === 0, 'Uygulama kendi sunucusuna (GitHub Pages) hiçbir veri GÖNDERMEDİ (POST/PUT/gövde yok)');
+  const secret = /g%C3%BCl|gulsen|kilic|%C3%87a%C4%9Fr|cagri|sahin|umit|isik|ilkay|ornek|anadolu|905|0532|533|demo|izmir|%C4%B0zmir/i;
+  const leaky = serverLog.filter(r => secret.test(r.url) || r.url.includes('?'));
+  ok(leaky.length === 0, 'Sunucu isteklerinde hiçbir kişisel veri yok (sadece uygulama dosyaları istendi)' + (leaky.length ? ': ' + leaky.map(r => r.url).join(', ') : ''));
+  const allowed = /^\/(index\.html|styles\.css|sw\.js|manifest\.webmanifest|js\/[a-z]+\.js|lib\/[\w./-]+|icons\/[\w.-]+\.png|favicon\.ico)?$/;
+  const odd = serverLog.filter(r => !allowed.test(r.url.split('?')[0]));
+  ok(odd.length === 0, 'Sunucudan sadece bilinen uygulama dosyaları istendi' + (odd.length ? ': ' + odd.map(r => r.url).join(', ') : ''));
+
   const realErrors = errors.filter(e => !/favicon|net::ERR_INTERNET_DISCONNECTED|Failed to load resource/.test(e));
   ok(realErrors.length === 0, 'Konsolda hata yok' + (realErrors.length ? ': ' + realErrors.join(' | ') : ''));
 
+  // Ölçüm düzeneğinin gerçekten çalıştığını doğrula: bilerek dış istek at, kaydedilmeli
+  const blocked = await page.evaluate(() => new Promise(r => {
+    document.addEventListener('securitypolicyviolation', e => r(e.violatedDirective), { once: true });
+    fetch('https://example.com/kontrol').catch(() => null);
+    setTimeout(() => r(null), 1500);
+  }));
+  ok(blocked === 'connect-src', 'Güvenlik politikası (CSP): uygulama içinden dış adrese bağlantı tarayıcı tarafından engelleniyor');
+  const before = externalLog.length;
+  const probe = await ctx.newPage();
+  await probe.goto('http://example.com/kontrol').catch(() => null);
+  await probe.close();
+  ok(externalLog.length > before, 'Kontrol: ölçüm düzeneği dış istekleri gerçekten yakalıyor (ayrı sekmeden atılan deneme isteği kaydedildi)');
   await page.screenshot({ path: path.join(TMP, 'son.png') });
   await browser.close();
-  server.close();
+  server.close(); proxy.close();
   console.log(`\nTOPLAM: ${passed} kontrol başarılı`);
 })().catch(e => { console.error(e); server.close(); process.exit(1); });

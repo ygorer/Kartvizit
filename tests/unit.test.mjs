@@ -134,3 +134,16 @@ test('Telefon yardımcıları', () => {
   assert.equal(whatsappNumber('532 123 45 67'), '905321234567');
   assert.equal(phoneKey('+90 532 123 45 67'), phoneKey('0532 123 4567'));
 });
+
+test('Güvenlik: tehlikeli bağlantı şemaları engellenir', async () => {
+  const { normalizeUrl, linkedinUrl } = await import('../js/vcard.js');
+  assert.equal(normalizeUrl('javascript:alert(1)'), '');
+  assert.equal(normalizeUrl('JaVaScRiPt:alert(1)'), '');
+  assert.equal(normalizeUrl('data:text/html,<script>x</script>'), '');
+  assert.equal(normalizeUrl('ornek.com'), 'https://ornek.com');
+  assert.equal(normalizeUrl('http://ornek.com'), 'http://ornek.com');
+  assert.equal(linkedinUrl('javascript:alert(1)//linkedin.com'), '');
+  assert.equal(linkedinUrl('linkedin.com/in/x'), 'https://linkedin.com/in/x');
+  const r = parseQRContent('BEGIN:VCARD\nVERSION:3.0\nN:X;Y\nURL:javascript:alert(1)\nEND:VCARD');
+  assert.equal(normalizeUrl(r.contact.web), '');
+});

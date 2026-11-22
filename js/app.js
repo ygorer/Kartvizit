@@ -6,7 +6,7 @@ import {
 } from './vcard.js';
 import { parseCardText } from './parse.js';
 
-const APP_VERSION = '1.0.0';
+const APP_VERSION = '1.1.0';
 // QR içinde Türkçe karakterler için UTF-8 kullan
 if (window.qrcode) qrcode.stringToBytes = qrcode.stringToBytesFuncs['UTF-8'];
 const DAY = 86400000;
@@ -31,6 +31,8 @@ const S = k => state.settings[k];
 // Başlangıç
 // --------------------------------------------------------------
 async function init() {
+  // Gizlilik: önceki oturumdan kalan geçici .vcf/.ics dosyalarını sil
+  try { if ('caches' in window) caches.delete('kartvizit-files'); } catch { }
   const [profiles, contacts, events, settings] = await Promise.all(db.STORES.map(s => db.all(s)));
   state.profiles = profiles.sort((a, b) => a.createdAt - b.createdAt);
   state.contacts = contacts;
@@ -150,7 +152,9 @@ function shareFile(text, filename, type, title) {
 // Service worker hazırsa dosya, uygulamanın kendi adresinden (gerçek bir dosya gibi) sunulur;
 // bu yöntem ana ekran uygulamasında blob/data adreslerinden daha güvenilirdir.
 async function openFile(text, filename, type) {
-  const name = `${Date.now().toString(36)}-${filename}`;
+  // Gizlilik: adreste kişi adı yer almaz, sadece rastgele bir kod kullanılır
+  const ext = (filename.match(/\.[a-z]+$/i) || [''])[0];
+  const name = `${crypto.getRandomValues(new Uint32Array(2)).join('')}${ext}`;
   const url = new URL(`files/${encodeURIComponent(name)}`, location.href).href;
   try {
     if ('caches' in window && navigator.serviceWorker?.controller) {
@@ -162,6 +166,8 @@ async function openFile(text, filename, type) {
         headers: { 'Content-Type': `${type}; charset=utf-8`, 'Cache-Control': 'no-store' }
       }));
       location.href = url;
+      // Gizlilik: geçici dosya 2 dakika sonra cihazdan da silinir
+      setTimeout(() => cache.delete(url).catch(() => { }), 120000);
       return;
     }
   } catch (e) { console.warn(e); }
@@ -350,8 +356,33 @@ function viewCard() {
 }
 
 function profileQRText(p) {
-  // QR'a fotoğraf eklenmez (QR'ın okunabilir boyutta kalması için)
-  return buildVCard(p, { photo: false, social: false });
+  // QR'a fotoğraf ve özel notlar eklenmez (okunabilir boyut + gizlilik)
+  return buildVCard(shareableFields(p), { photo: false, social: false });
+}
+
+// Başkasıyla paylaşılacak kartta sadece kartvizit bilgileri bulunur;
+// kendi notlarınız, etiketleriniz, etkinlik ve öncelik bilgisi asla eklenmez.
+function shareableFields(c) {
+  const f = ['firstName', 'lastName', 'title', 'company', 'phoneMobile', 'phoneWork', 'email', 'web', 'linkedin', 'address'];
+  const o = {};
+  for (const k of f) o[k] = c[k] || '';
+  return o;
+}
+function shareableVCard(c) {
+  return buildVCard({ ...shareableFields(c), photo: c.photo || '' }, {});
+}
+function contactShareText(c) {
+  const lines = [
+    displayName(c),
+    [c.title, c.company].filter(Boolean).join(' · '),
+    c.phoneMobile && `Cep: ${c.phoneMobile}`,
+    c.phoneWork && `İş: ${c.phoneWork}`,
+    c.email && `E-posta: ${c.email}`,
+    c.web && `Web: ${c.web}`,
+    c.linkedin && `LinkedIn: ${linkedinUrl(c.linkedin)}`,
+    c.address && `Adres: ${c.address}`,
+  ].filter(Boolean);
+  return lines.join('\n');
 }
 
 function qrSvg(text) {
@@ -365,15 +396,16 @@ function qrSvg(text) {
 }
 
 let wakeLock = null;
-async function showQR() {
-  const p = activeProfile();
+async function showQR(person, label = '') {
+  const p = person || activeProfile();
   if (!p) return;
   const el = document.createElement('div');
   el.className = 'qr-full';
   el.dataset.act = 'close-qr';
   el.innerHTML = `<div class="hint">☀️ Okutmayı kolaylaştırmak için ekran parlaklığını artırın<br><span style="font-size:13px">(Sağ üstten aşağı kaydırın → parlaklığı sonuna kadar açın)</span></div>
     <div class="qr" id="qrBox">${qrSvg(profileQRText(p))}</div>
-    <div class="nm">${esc(fullName(p))}</div>
+    ${label ? `<div class="close-hint">${esc(label)}</div>` : ''}
+    <div class="nm">${esc(fullName(p) || p.company || '')}</div>
     <div class="muted">${esc([p.title, p.company].filter(Boolean).join(' · '))}</div>
     <div class="close-hint">Kapatmak için dokunun</div>`;
   document.body.appendChild(el);
@@ -519,12 +551,14 @@ function openContact(id) {
   const ev = eventById(c.eventId);
   const tel = c.phoneMobile || c.phoneWork;
   const wa = whatsappNumber(c.phoneMobile || c.phoneWork);
+  const mailOk = /^[^\s@?&#<>"']+@[^\s@?&#<>"']+$/.test(c.email || '');
+  const li = linkedinUrl(c.linkedin);
   const info = [
     ['Cep', c.phoneMobile && `<a href="tel:${esc(c.phoneMobile.replace(/[^\d+]/g, ''))}">${esc(c.phoneMobile)}</a>`],
     ['İş tel.', c.phoneWork && `<a href="tel:${esc(c.phoneWork.replace(/[^\d+]/g, ''))}">${esc(c.phoneWork)}</a>`],
-    ['E-posta', c.email && `<a href="mailto:${esc(c.email)}">${esc(c.email)}</a>`],
-    ['Web', c.web && `<a href="${esc(normalizeUrl(c.web))}" target="_blank" rel="noopener noreferrer">${esc(c.web)}</a>`],
-    ['LinkedIn', c.linkedin && `<a href="${esc(linkedinUrl(c.linkedin))}" target="_blank" rel="noopener noreferrer">${esc(c.linkedin)}</a>`],
+    ['E-posta', c.email && (mailOk ? `<a href="mailto:${esc(c.email)}">${esc(c.email)}</a>` : esc(c.email))],
+    ['Web', c.web && (normalizeUrl(c.web) ? `<a href="${esc(normalizeUrl(c.web))}" target="_blank" rel="noopener noreferrer">${esc(c.web)}</a>` : esc(c.web))],
+    ['LinkedIn', c.linkedin && (linkedinUrl(c.linkedin) ? `<a href="${esc(linkedinUrl(c.linkedin))}" target="_blank" rel="noopener noreferrer">${esc(c.linkedin)}</a>` : esc(c.linkedin))],
     ['Adres', c.address && esc(c.address)],
     ['Etkinlik', ev ? esc(ev.name) : ''],
     ['Tarih', esc(formatDateTR(c.createdAt))],
@@ -551,17 +585,21 @@ function openContact(id) {
       <div class="actions">
         <a class="action" href="${tel ? 'tel:' + esc(tel.replace(/[^\d+]/g, '')) : '#'}" aria-disabled="${!tel}"><span class="ai">📞</span>Ara</a>
         <a class="action" href="${wa ? 'https://wa.me/' + esc(wa) : '#'}" target="_blank" rel="noopener noreferrer" aria-disabled="${!wa}"><span class="ai">💬</span>WhatsApp</a>
-        <a class="action" href="${c.email ? 'mailto:' + esc(c.email) : '#'}" aria-disabled="${!c.email}"><span class="ai">✉️</span>E-posta</a>
-        <a class="action" href="${c.linkedin ? esc(linkedinUrl(c.linkedin)) : '#'}" target="_blank" rel="noopener noreferrer" aria-disabled="${!c.linkedin}"><span class="ai">in</span>LinkedIn</a>
+        <a class="action" href="${mailOk ? 'mailto:' + esc(c.email) : '#'}" aria-disabled="${!mailOk}"><span class="ai">✉️</span>E-posta</a>
+        <a class="action" href="${li ? esc(li) : '#'}" target="_blank" rel="noopener noreferrer" aria-disabled="${!li}"><span class="ai">in</span>LinkedIn</a>
       </div>
-      <button class="btn" data-act="followup-mail" data-id="${c.id}" ${c.email ? '' : 'disabled'}>✉️ Takip e-postası hazırla</button>
+      <button class="btn" data-act="followup-mail" data-id="${c.id}" ${mailOk ? '' : 'disabled'}>✉️ Takip e-postası hazırla</button>
       ${fu}
       <div class="card"><ul class="kv" style="margin:0">${info}</ul></div>
       ${c.cardImage ? `<div class="section-title">Kartvizit fotoğrafı</div><img class="img-prev" src="${esc(c.cardImage)}" alt="Kartvizit">` : ''}
-      <div class="grid2" style="margin-top:14px">
-        <button class="btn" data-act="share-contact" data-id="${c.id}">⬆️ vCard paylaş</button>
-        <button class="btn" data-act="edit-contact" data-id="${c.id}">✏️ Düzenle</button>
+      <div class="section-title">Bu kişiyi başkasıyla paylaş</div>
+      <div class="card stack">
+        <button class="btn primary" data-act="qr-contact" data-id="${c.id}">▦ QR kod olarak göster</button>
+        <button class="btn" data-act="share-contact" data-id="${c.id}">💬 WhatsApp / AirDrop / Mesajlar (vCard)</button>
+        <button class="btn" data-act="wa-text-contact" data-id="${c.id}">💬 WhatsApp'ta metin olarak gönder</button>
+        <p class="muted small" style="margin:0">Paylaşılan kartta sadece iletişim bilgileri bulunur. Notlarınız, etiketler, öncelik ve etkinlik bilgisi gönderilmez.</p>
       </div>
+      <button class="btn" style="margin-top:10px" data-act="edit-contact" data-id="${c.id}">✏️ Düzenle</button>
       <button class="btn danger" style="margin-top:10px" data-act="delete-contact" data-id="${c.id}">Kişiyi sil</button>`
   });
 }
@@ -1029,7 +1067,7 @@ function viewSettings() {
     </div>
 
     <div class="section-title">Gizlilik</div>
-    <div class="card small muted">Tüm veriler sadece bu telefonda (tarayıcının IndexedDB deposunda) saklanır. Sunucu, analitik, reklam veya dış servis yoktur; OCR ve QR işlemleri cihazda yapılır. Uygulamayı ana ekrandan silerseniz veriler de silinebilir — düzenli yedek alın.</div>
+    <div class="card small muted">Tüm veriler sadece bu telefonda (IndexedDB) saklanır. Uygulama hiçbir sunucuya veri göndermez: sunucu, hesap, analitik, reklam veya dış servis yoktur; OCR ve QR işlemleri cihazda yapılır. Veri telefondan yalnızca <b>sizin dokunuşunuzla</b> çıkar: Paylaş/WhatsApp, Kişiler'e ekleme, yedek dosyası ve e-posta. Kişiler'e eklediğiniz kişiler iCloud Kişiler açıksa Apple tarafından iCloud'a eşitlenir; yedeği iCloud Drive yerine "iPhone'umda" klasörüne kaydederseniz telefonda kalır.</div>
 
     <div class="section-title">Tehlikeli bölge</div>
     <button class="btn danger" data-act="reset-all">🗑 Verileri sıfırla</button>
@@ -1095,7 +1133,9 @@ async function reloadState() {
 }
 
 function csvCell(v) {
-  const s = String(v ?? '');
+  let s = String(v ?? '');
+  // Excel formül enjeksiyonunu engelle (=, @, + veya - ile başlayan ve telefon olmayan hücreler)
+  if (/^[=@\t\r]/.test(s) || (/^[+-]/.test(s) && !/^[+\-\d\s()./]+$/.test(s))) s = "'" + s;
   return /[;"\n\r,]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 export function buildCSV(contacts, evName) {
@@ -1261,9 +1301,19 @@ const actions = {
   'to-phone': el => addContactsToPhone([state.contacts.find(c => c.id === el.dataset.id)]),
   'share-contact': el => {
     const c = state.contacts.find(x => x.id === el.dataset.id);
-    const vcf = contactVCard(c), name = `${safeFile(displayName(c))}.vcf`;
+    const vcf = shareableVCard(c), name = `${safeFile(displayName(c))}.vcf`;
     const r = shareFile(vcf, name, 'text/vcard', displayName(c));
-    if (!r) downloadFile(vcf, name, 'text/vcard');
+    if (r) { r.catch(() => toast('Paylaşılamadı')); return; }
+    downloadFile(vcf, name, 'text/vcard');
+  },
+  'qr-contact': el => {
+    const c = state.contacts.find(x => x.id === el.dataset.id);
+    showQR(c, 'Kamerayla okutun → rehbere kaydedin');
+  },
+  'wa-text-contact': el => {
+    const c = state.contacts.find(x => x.id === el.dataset.id);
+    // Alıcıyı WhatsApp'ta siz seçersiniz; metin sadece sizin dokunuşunuzla gönderilir
+    window.open(`https://wa.me/?text=${encodeURIComponent(contactShareText(c))}`, '_blank', 'noopener,noreferrer');
   },
   'edit-contact': el => {
     const c = state.contacts.find(x => x.id === el.dataset.id);
