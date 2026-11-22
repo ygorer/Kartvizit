@@ -1,5 +1,5 @@
 // Kartvizit service worker — çevrimdışı çalışma
-const VERSION = 'v1.1.0';
+const VERSION = 'v1.1.1';
 const CACHE = `kartvizit-${VERSION}`;
 const FILES_CACHE = 'kartvizit-files'; // Kişiler/Takvim için geçici .vcf/.ics dosyaları
 const CORE = [

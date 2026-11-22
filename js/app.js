@@ -6,7 +6,7 @@ import {
 } from './vcard.js';
 import { parseCardText } from './parse.js';
 
-const APP_VERSION = '1.1.0';
+const APP_VERSION = '1.1.1';
 // QR içinde Türkçe karakterler için UTF-8 kullan
 if (window.qrcode) qrcode.stringToBytes = qrcode.stringToBytesFuncs['UTF-8'];
 const DAY = 86400000;
@@ -220,8 +220,8 @@ function confirmAdded(list) {
   dialog({
     title: one ? 'Kişiler\'e kaydedildi mi?' : `${list.length} kişi Kişiler'e kaydedildi mi?`,
     message: one
-      ? 'iPhone\'un kişi ekranında "Yeni Kişi Oluştur" (veya "Kaydet") dediyseniz Evet\'e dokunun. Böylece kişi "Rehberde ✓" olarak işaretlenir.'
-      : 'iPhone\'da "Tüm kişileri ekle" dediyseniz Evet\'e dokunun. Bu kişiler bir daha toplu eklemeye dahil edilmez.',
+      ? '1) iPhone "kişi kartı indirilsin mi?" diye sorarsa "Allow / İzin Ver"e dokunun.\n2) Açılan kişi ekranında "Yeni Kişi Oluştur"a dokunun.\n3) Sonra burada Evet deyin; kişi "Rehberde ✓" olarak işaretlenir.'
+      : '1) iPhone sorarsa "Allow / İzin Ver"e dokunun.\n2) "Tüm N Kişiyi Ekle"ye dokunun.\n3) Sonra burada Evet deyin; bu kişiler bir daha toplu eklemeye dahil edilmez.'.replace('N', list.length),
     buttons: [
       { label: 'Evet, Rehberde ✓', style: 'ok', run: () => markInContacts(list) },
       { label: 'Kişi ekranı açılmadı — paylaşım menüsüyle dene', run: () => addContactsToPhone(list, { retry: S('addMethod') === 'share' ? 'open' : 'share' }) },
@@ -790,7 +790,7 @@ function afterSaveAsk(c, merged = false) {
   if (c.inContacts) return;
   dialog({
     title: 'iPhone Kişiler\'e eklensin mi?',
-    message: `${displayName(c)} iPhone rehberinize kaydedilsin. Açılan ekranda "Yeni Kişi Oluştur"a dokunun.`,
+    message: `${displayName(c)} iPhone rehberinize kaydedilsin. iPhone sorarsa "Allow / İzin Ver", ardından "Yeni Kişi Oluştur"a dokunun.`,
     buttons: [
       { label: '📇 iPhone Kişiler\'e ekle', style: 'ok', run: () => addContactsToPhone([c]) },
       { label: 'Şimdi değil', style: 'ghost' }

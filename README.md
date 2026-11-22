@@ -72,8 +72,9 @@ Paylaşılan kartta **sadece iletişim bilgileri** bulunur. Kendi notlarınız, 
 
 ### Tek kişi
 1. Kişiyi kaydedince **"iPhone Kişiler'e eklensin mi?"** sorusu çıkar (Ayarlar → *Her kayıttan sonra otomatik sor* ile açıp kapatabilirsiniz). Ya da kişi kartındaki yeşil **📇 iPhone Kişiler'e ekle** düğmesine dokunun.
-2. iPhone'un kişi ekranı açılır. **Yeni Kişi Oluştur**'a (veya **Kaydet**'e) dokunun.
-3. Uygulamaya dönünce sorulan **"Kişiler'e kaydedildi mi?"** sorusuna **Evet** deyin. Kişi **Rehberde ✓** olarak işaretlenir.
+2. iPhone *"ygorer.github.io is trying to download a contact card"* (kişi kartı indirilsin mi?) diye sorar: **Allow (İzin Ver)**'e dokunun.
+3. iPhone'un kişi ekranı açılır. **Yeni Kişi Oluştur**'a (veya **Kaydet**'e) dokunun.
+4. Uygulamaya dönünce sorulan **"Kişiler'e kaydedildi mi?"** sorusuna **Evet** deyin. Kişi **Rehberde ✓** olarak işaretlenir.
 
 Kişiler'e eklenen kartta şunların hepsi bulunur: ad ve soyad (ayrı alanlarda), unvan, şirket, cep ve iş telefonu, e-posta, web, LinkedIn, adres, fotoğraf (kişi fotoğrafı yoksa küçültülmüş kartvizit fotoğrafı) ve NOT alanında:
 `Tanışma: {etkinlik adı}, {tarih}. Etiketler: {etiketler}. Not: {notunuz}`
@@ -91,7 +92,7 @@ Ana ekran uygulamalarında Safari'nin "indirme" davranışı kısıtlı olduğu 
 
 | Yöntem | Nasıl çalışır |
 |---|---|
-| **Kişi ekranını doğrudan aç** (varsayılan, önerilen) | vCard dosyası uygulamanın kendi adresinden (service worker üzerinden, `files/...vcf`) gerçek bir dosya olarak açılır; Safari bunu iPhone'un kişi ekranıyla gösterir. Blob/data adresleri ana ekran uygulamalarında güvenilir çalışmadığı için bu yöntem seçildi. Service worker henüz hazır değilse (ilk açılışın ilk saniyeleri) `data:` adresi denenir. |
+| **Kişi ekranını doğrudan aç** (varsayılan, önerilen — **iPhone'da denendi ve çalışıyor**) | vCard dosyası uygulamanın kendi adresinden (service worker üzerinden, `files/...vcf`) gerçek bir dosya olarak açılır; Safari bunu iPhone'un kişi ekranıyla gösterir. Blob/data adresleri ana ekran uygulamalarında güvenilir çalışmadığı için bu yöntem seçildi. Service worker henüz hazır değilse (ilk açılışın ilk saniyeleri) `data:` adresi denenir. |
 | **Paylaşım menüsü** | `.vcf` dosyası iOS paylaşım menüsüyle açılır; menüde **Kişiler** (veya dosya önizlemesi → paylaş → Kişiler) seçilir. |
 
 Kişi ekranı açılmazsa çıkan soruda **"Kişi ekranı açılmadı — paylaşım menüsüyle dene"** düğmesi diğer yöntemi dener. Hangisi telefonunuzda çalışıyorsa Ayarlar'dan onu seçin.
