@@ -6,7 +6,7 @@ import {
 } from './vcard.js';
 import { parseCardText } from './parse.js';
 
-const APP_VERSION = '1.1.1';
+const APP_VERSION = '1.1.2';
 // QR içinde Türkçe karakterler için UTF-8 kullan
 if (window.qrcode) qrcode.stringToBytes = qrcode.stringToBytesFuncs['UTF-8'];
 const DAY = 86400000;

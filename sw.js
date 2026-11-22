@@ -1,5 +1,5 @@
 // Kartvizit service worker — çevrimdışı çalışma
-const VERSION = 'v1.1.1';
+const VERSION = 'v1.1.2';
 const CACHE = `kartvizit-${VERSION}`;
 const FILES_CACHE = 'kartvizit-files'; // Kişiler/Takvim için geçici .vcf/.ics dosyaları
 const CORE = [
@@ -59,6 +59,8 @@ self.addEventListener('fetch', event => {
     event.respondWith((async () => {
       try {
         const res = await fetch(req);
+        // Site kapatılırsa (404 vb.) veya hata verirse önbellekteki uygulamayla açılmaya devam et
+        if (!res.ok) return (await caches.match('index.html', { ignoreSearch: true })) || res;
         const cache = await caches.open(CACHE);
         cache.put('index.html', res.clone());
         return res;
