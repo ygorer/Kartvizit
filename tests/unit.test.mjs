@@ -147,3 +147,26 @@ test('Güvenlik: tehlikeli bağlantı şemaları engellenir', async () => {
   const r = parseQRContent('BEGIN:VCARD\nVERSION:3.0\nN:X;Y\nURL:javascript:alert(1)\nEND:VCARD');
   assert.equal(normalizeUrl(r.contact.web), '');
 });
+
+test('WhatsApp ve konum: vCard üretimi ve geri okuma', () => {
+  const c = { firstName: 'Ümit', lastName: 'Işık', whatsapp: '0544 222 33 44', location: 'Kadıköy, İstanbul', geo: { lat: 40.99021, lon: 29.02897 }, createdAt: new Date(2026, 10, 22).getTime(), tags: [] };
+  const note = buildNote(c, 'Fuar');
+  assert.equal(note, 'Tanışma: Fuar, 22.11.2026. Konum: Kadıköy, İstanbul — 40.99021, 29.02897. Etiketler: -. Not: -');
+  const v = buildVCard(c, { note, geo: true });
+  assert.match(v, /item2\.URL:https:\/\/wa\.me\/905442223344/);
+  assert.match(v, /IMPP;X-SERVICE-TYPE=WhatsApp:x-apple:\+905442223344/);
+  assert.match(v, /GEO:40\.99021;29\.02897/);
+  const [p] = parseVCards(v);
+  assert.equal(p.whatsapp, '+905442223344');
+  assert.deepEqual(p.geo, { lat: 40.99021, lon: 29.02897 });
+  // kullanıcı adı
+  const v2 = buildVCard({ firstName: 'A', whatsapp: '@ayse.kaya' });
+  assert.match(v2, /IMPP;X-SERVICE-TYPE=WhatsApp:x-apple:ayse\.kaya/);
+  assert.ok(!/wa\.me/.test(v2));
+  assert.equal(parseVCards(v2)[0].whatsapp, 'ayse.kaya');
+  // GEO istenmezse eklenmez (paylaşımda konum gitmez)
+  assert.ok(!/GEO:/.test(buildVCard(c)));
+  // OCR: WhatsApp etiketi
+  const o = parseCardText('Ali Veli\nWhatsApp: 0555 111 22 33\nali@x.com');
+  assert.equal(o.whatsapp, '+90 555 111 22 33');
+});

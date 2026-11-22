@@ -74,7 +74,7 @@ async function makeImages(browser) {
   await pre.close();
 
   const browser = await chromium.launch({ args: ['--proxy-server=http://127.0.0.1:8899', '--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', `--use-file-for-fake-video-capture=${path.join(TMP, 'qr.mjpeg')}`] });
-  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, acceptDownloads: true, permissions: ['camera'], locale: 'tr-TR' });
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, acceptDownloads: true, permissions: ['camera', 'geolocation'], geolocation: { latitude: 40.990212, longitude: 29.028971 }, locale: 'tr-TR' });
   const page = await ctx.newPage();
   const errors = [];
   page.on('pageerror', e => errors.push(e.message));
@@ -206,6 +206,11 @@ async function makeImages(browser) {
   await page.fill('#contactForm [name="firstName"]', 'Ümit');
   await page.fill('#contactForm [name="lastName"]', 'Işık');
   await page.fill('#contactForm [name="phoneMobile"]', '0544 222 33 44');
+  await page.fill('#contactForm [name="whatsapp"]', '@umit.isik');
+  await page.fill('#contactForm [name="location"]', 'Kadıköy, İstanbul');
+  await page.click('[data-act="geo"]');
+  await page.waitForSelector('#geoInfo:has-text("40.99021, 29.02897")');
+  ok(true, 'Konum: "Bulunduğum yeri ekle" GPS koordinatını forma ekledi');
   await page.click('[data-act="save-contact"]');
   await page.waitForSelector('text=iPhone Kişiler\'e eklensin mi?');
   ok(Date.now() - t0 < 10000, 'Hızlı giriş: ad + telefon ile kayıt');
@@ -220,6 +225,8 @@ async function makeImages(browser) {
   const v2 = fs.readFileSync(await dl2.path(), 'utf8');
   const n = (v2.match(/BEGIN:VCARD/g) || []).length;
   ok(n === 2 && v2.includes('N:Şahin;Çağrı;;;') && v2.includes('N:Işık;Ümit;;;') && !v2.includes('Gülşen'), 'Toplu vCard: 2 kişi tek dosyada, rehberdeki kişi tekrar gönderilmedi');
+  const v2u = v2.replace(/\r\n /g, '');
+  ok(v2u.includes('IMPP;X-SERVICE-TYPE=WhatsApp:x-apple:umit.isik') && v2u.includes('GEO:40.99021;29.02897') && v2u.includes('Konum: Kadıköy\\, İstanbul — 40.99021\\, 29.02897.'), 'vCard: WhatsApp kullanıcı adı, GEO ve NOT alanında konum var');
   ok(/PHOTO;ENCODING=b;TYPE=JPEG:/.test(v2), 'Toplu vCard: kartvizit fotoğrafı PHOTO alanında (küçültülmüş)');
   await page.click('.dialog button:has-text("Evet, Rehberde")');
   await page.waitForSelector('[data-act="bulk-event"][disabled]');

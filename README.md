@@ -62,6 +62,11 @@ Kişi kartını açın ve **Bu kişiyi başkasıyla paylaş** bölümünü kulla
 
 Paylaşılan kartta **sadece iletişim bilgileri** bulunur. Kendi notlarınız, etiketler, öncelik ve etkinlik bilgisi **asla gönderilmez**.
 
+### WhatsApp ve konum
+- **WhatsApp**: Kişinin WhatsApp numarası veya **kullanıcı adı** yazılabilir. Boş bırakılırsa WhatsApp düğmesi cep telefonunu kullanır. Kişiler'e eklendiğinde iPhone kişi kartında WhatsApp olarak görünür.
+- **Konum**: Elle yazılabilir (ör. "Kadıköy, İstanbul") ya da **📍 Bulunduğum yeri ekle** ile telefonun GPS konumu eklenir (ilk seferde iPhone konum izni sorar). Kişi kartında konuma dokununca Apple Haritalar açılır. Konum, Kişiler'e eklenen kartın NOT alanına da yazılır.
+- Konum sadece telefonda işlenir; adres bulmak için hiçbir servise gönderilmez. Başkasıyla kart paylaşırken (QR, WhatsApp) konum **gönderilmez**; WhatsApp bilgisi gönderilir.
+
 ### Etkinlik ve takip
 - **Etkinlik** sekmesinde etkinlik oluşturup **aktif** yapın. Aktifken kaydettiğiniz herkes otomatik olarak o etkinliğe bağlanır (üst köşede yeşil etkinlik adı görünür).
 - Her kişiye etiket (Müşteri, Tedarikçi, İş ortağı, Aday…), öncelik, not ve **takip hatırlatması** (X gün sonra dönüş) eklenebilir.
@@ -77,7 +82,7 @@ Paylaşılan kartta **sadece iletişim bilgileri** bulunur. Kendi notlarınız, 
 4. Uygulamaya dönünce sorulan **"Kişiler'e kaydedildi mi?"** sorusuna **Evet** deyin. Kişi **Rehberde ✓** olarak işaretlenir.
 
 Kişiler'e eklenen kartta şunların hepsi bulunur: ad ve soyad (ayrı alanlarda), unvan, şirket, cep ve iş telefonu, e-posta, web, LinkedIn, adres, fotoğraf (kişi fotoğrafı yoksa küçültülmüş kartvizit fotoğrafı) ve NOT alanında:
-`Tanışma: {etkinlik adı}, {tarih}. Etiketler: {etiketler}. Not: {notunuz}`
+`Tanışma: {etkinlik adı}, {tarih}. Konum: {konum}. Etiketler: {etiketler}. Not: {notunuz}` (konum yoksa "Konum" kısmı yazılmaz). WhatsApp ve GPS konumu da karta eklenir.
 
 ### Toplu ekleme
 - **Etkinlik** sekmesinde etkinliğin yanındaki **📇 N kişiyi Kişiler'e ekle** düğmesi, o etkinlikte henüz rehbere eklenmemiş kişileri **tek bir .vcf dosyasında** birleştirir. iPhone'da **"Tüm N Kişiyi Ekle"**ye dokunun, sonra uygulamada **Evet**'i seçin.

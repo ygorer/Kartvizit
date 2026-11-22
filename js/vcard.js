@@ -46,9 +46,30 @@ export function formatDateTR(ts) {
   return `${p(d.getDate())}.${p(d.getMonth() + 1)}.${d.getFullYear()}`;
 }
 
+// Konum metni: elle yazılan yer + (varsa) GPS koordinatı
+export function locationText(c) {
+  const parts = [];
+  if ((c.location || '').trim()) parts.push(c.location.trim());
+  if (c.geo && isFinite(c.geo.lat) && isFinite(c.geo.lon)) parts.push(`${(+c.geo.lat).toFixed(5)}, ${(+c.geo.lon).toFixed(5)}`);
+  return parts.join(' — ');
+}
+export function mapsUrl(c) {
+  if (c.geo && isFinite(c.geo.lat) && isFinite(c.geo.lon)) {
+    return `https://maps.apple.com/?ll=${(+c.geo.lat).toFixed(5)},${(+c.geo.lon).toFixed(5)}&q=${encodeURIComponent(c.location || 'Konum')}`;
+  }
+  if ((c.location || '').trim()) return `https://maps.apple.com/?q=${encodeURIComponent(c.location.trim())}`;
+  return '';
+}
+// WhatsApp alanı numara mı, kullanıcı adı mı?
+export function whatsappIsNumber(w) {
+  return /^\+?[\d\s().-]{7,}$/.test((w || '').trim());
+}
+
 export function buildNote(c, eventName) {
   const tags = (c.tags || []).join(', ');
+  const loc = locationText(c);
   return `Tanışma: ${eventName || '-'}, ${formatDateTR(c.createdAt)}. ` +
+    (loc ? `Konum: ${loc}. ` : '') +
     `Etiketler: ${tags || '-'}. Not: ${(c.note || '').trim() || '-'}`;
 }
 
@@ -96,6 +117,20 @@ export function buildVCard(c, opts = {}) {
     add(`item1.URL:${escapeText(li)}`);
     add('item1.X-ABLabel:LinkedIn');
     if (opts.social !== false) add(`X-SOCIALPROFILE;TYPE=linkedin:${escapeText(li)}`);
+  }
+  if (c.whatsapp) {
+    const w = c.whatsapp.trim();
+    if (whatsappIsNumber(w)) {
+      const num = whatsappNumber(w);
+      add(`item2.URL:https://wa.me/${num}`);
+      add('item2.X-ABLabel:WhatsApp');
+      add(`IMPP;X-SERVICE-TYPE=WhatsApp:x-apple:+${num}`);
+    } else {
+      add(`IMPP;X-SERVICE-TYPE=WhatsApp:x-apple:${escapeText(w.replace(/^@/, ''))}`);
+    }
+  }
+  if (opts.geo && c.geo && isFinite(c.geo.lat) && isFinite(c.geo.lon)) {
+    add(`GEO:${(+c.geo.lat).toFixed(5)};${(+c.geo.lon).toFixed(5)}`);
   }
   if (c.address) {
     add(`ADR;TYPE=WORK:;;${escapeText(c.address)};;;;`);
@@ -150,7 +185,8 @@ function splitUnescaped(s, sep) {
 export function emptyContact() {
   return {
     firstName: '', lastName: '', title: '', company: '', phoneMobile: '',
-    phoneWork: '', email: '', web: '', linkedin: '', address: '', note: '', photo: ''
+    phoneWork: '', email: '', web: '', linkedin: '', address: '', note: '', photo: '',
+    whatsapp: '', location: ''
   };
 }
 
@@ -223,12 +259,27 @@ export function parseVCards(text) {
       case 'EMAIL': if (!cur.email) cur.email = unescapeText(value).replace(/^mailto:/i, '').trim(); break;
       case 'URL': {
         const v = unescapeText(value).trim();
+        const wa = v.match(/^https?:\/\/(?:api\.)?wa\.me\/\+?(\d{7,})/i);
+        if (wa) { cur.whatsapp = cur.whatsapp || '+' + wa[1]; break; }
         if (/linkedin\.com/i.test(v)) cur.linkedin = cur.linkedin || v;
         else if (!cur.web) cur.web = v;
         break;
       }
+      case 'IMPP': {
+        const v = unescapeText(value).trim();
+        if (/whatsapp/i.test(params['X-SERVICE-TYPE'] || '') || /^whatsapp:/i.test(v)) {
+          cur.whatsapp = cur.whatsapp || v.replace(/^(x-apple|whatsapp):/i, '');
+        }
+        break;
+      }
+      case 'GEO': {
+        const m = value.replace(/^geo:/i, '').split(/[;,]/).map(Number);
+        if (m.length >= 2 && isFinite(m[0]) && isFinite(m[1])) cur.geo = { lat: m[0], lon: m[1] };
+        break;
+      }
       case 'X-SOCIALPROFILE': {
         const v = unescapeText(value).trim();
+        if (/whatsapp/i.test(v) || types.includes('whatsapp')) { cur.whatsapp = cur.whatsapp || (params['X-USER'] || v.replace(/^[a-z-]+:/i, '')); break; }
         if (/linkedin/i.test(v) || types.includes('linkedin')) cur.linkedin = cur.linkedin || v;
         break;
       }

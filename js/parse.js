@@ -111,6 +111,7 @@ export function parseCardText(text, lines) {
       const hintWork = /\b(t|tel|phone|ofis|office|iş|work|santral)\b\.?/i.test(label) && !hintMobile;
       const hintFax = /\b(f|fax|faks)\b\.?/i.test(label);
       if (hintFax && !hintMobile) continue;
+      if (/whats\s?app/i.test(label)) c.whatsapp = c.whatsapp || formatPhone(m);
       phones.push({ num: formatPhone(m), mobile: hintMobile || (!hintWork && isMobile(m)) });
     }
     if (any) used.add(i);

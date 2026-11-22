@@ -2,11 +2,12 @@
 import { db, uid } from './db.js';
 import {
   buildVCard, buildNote, fullName, formatDateTR, parseQRContent, parseVCards, emptyContact,
-  splitName, normalizeUrl, linkedinUrl, buildICS, phoneKey, whatsappNumber
+  splitName, normalizeUrl, linkedinUrl, buildICS, phoneKey, whatsappNumber,
+  whatsappIsNumber, locationText, mapsUrl
 } from './vcard.js';
 import { parseCardText } from './parse.js';
 
-const APP_VERSION = '1.1.2';
+const APP_VERSION = '1.2.0';
 // QR içinde Türkçe karakterler için UTF-8 kullan
 if (window.qrcode) qrcode.stringToBytes = qrcode.stringToBytesFuncs['UTF-8'];
 const DAY = 86400000;
@@ -201,7 +202,7 @@ function sendToContacts(vcf, filename, { onDone, forceMethod } = {}) {
 
 function contactVCard(c) {
   return buildVCard(c.photo || c.cardThumb ? { ...c, photo: c.photo || c.cardThumb } : c, {
-    note: buildNote(c, eventName(c.eventId))
+    note: buildNote(c, eventName(c.eventId)), geo: true
   });
 }
 
@@ -336,7 +337,7 @@ function viewCard() {
   const chips = state.profiles.map(x => `<button class="chip ${x.id === p.id ? 'on' : ''}" data-act="switch-profile" data-id="${x.id}">${esc(x.label || 'Profil')}</button>`).join('')
     + `<button class="chip" data-act="edit-profile" data-new="1">+ Profil</button>`;
   const info = [
-    ['Cep', p.phoneMobile], ['İş', p.phoneWork], ['E-posta', p.email], ['Web', p.web], ['LinkedIn', p.linkedin], ['Adres', p.address]
+    ['Cep', p.phoneMobile], ['İş', p.phoneWork], ['WhatsApp', p.whatsapp], ['E-posta', p.email], ['Web', p.web], ['LinkedIn', p.linkedin], ['Adres', p.address]
   ].filter(x => x[1]).map(([k, v]) => `<li><b>${k}</b><span>${esc(v)}</span></li>`).join('');
   return `${banners}
     <div class="chips">${chips}</div>
@@ -363,7 +364,7 @@ function profileQRText(p) {
 // Başkasıyla paylaşılacak kartta sadece kartvizit bilgileri bulunur;
 // kendi notlarınız, etiketleriniz, etkinlik ve öncelik bilgisi asla eklenmez.
 function shareableFields(c) {
-  const f = ['firstName', 'lastName', 'title', 'company', 'phoneMobile', 'phoneWork', 'email', 'web', 'linkedin', 'address'];
+  const f = ['firstName', 'lastName', 'title', 'company', 'phoneMobile', 'phoneWork', 'whatsapp', 'email', 'web', 'linkedin', 'address'];
   const o = {};
   for (const k of f) o[k] = c[k] || '';
   return o;
@@ -379,6 +380,7 @@ function contactShareText(c) {
     c.phoneWork && `İş: ${c.phoneWork}`,
     c.email && `E-posta: ${c.email}`,
     c.web && `Web: ${c.web}`,
+    c.whatsapp && `WhatsApp: ${c.whatsapp}`,
     c.linkedin && `LinkedIn: ${linkedinUrl(c.linkedin)}`,
     c.address && `Adres: ${c.address}`,
   ].filter(Boolean);
@@ -443,6 +445,7 @@ function editProfile(id, isNew) {
       ${f('phoneWork', 'İş telefonu', 'tel')}
       ${f('email', 'E-posta', 'email', 'autocomplete="email" autocapitalize="off"')}
       ${f('web', 'Web sitesi', 'url', 'autocapitalize="off" placeholder="ornek.com"')}
+      ${f('whatsapp', 'WhatsApp', 'text', 'autocapitalize="off" placeholder="Numara veya kullanıcı adı"')}
       ${f('linkedin', 'LinkedIn', 'url', 'autocapitalize="off" placeholder="linkedin.com/in/kullaniciadi"')}
       <label class="field"><span>Adres</span><textarea class="input" name="address" rows="2">${esc(p.address || '')}</textarea></label>
       <div class="field"><span>Fotoğraf / logo</span>
@@ -492,7 +495,7 @@ function filteredContacts() {
   }
   if (q) {
     list = list.filter(c => [c.firstName, c.lastName, fullName(c), c.company, c.title, c.email, c.phoneMobile, c.phoneWork,
-      c.note, (c.tags || []).join(' '), eventName(c.eventId)].join(' ').toLocaleLowerCase('tr-TR').includes(q));
+      c.note, c.whatsapp, c.location, (c.tags || []).join(' '), eventName(c.eventId)].join(' ').toLocaleLowerCase('tr-TR').includes(q));
   }
   return list.sort((a, b) => b.createdAt - a.createdAt);
 }
@@ -550,7 +553,9 @@ function openContact(id) {
   if (!c) return;
   const ev = eventById(c.eventId);
   const tel = c.phoneMobile || c.phoneWork;
-  const wa = whatsappNumber(c.phoneMobile || c.phoneWork);
+  const wa = whatsappIsNumber(c.whatsapp) ? whatsappNumber(c.whatsapp) : whatsappNumber(c.phoneMobile || c.phoneWork);
+  const loc = locationText(c);
+  const map = mapsUrl(c);
   const mailOk = /^[^\s@?&#<>"']+@[^\s@?&#<>"']+$/.test(c.email || '');
   const li = linkedinUrl(c.linkedin);
   const info = [
@@ -559,7 +564,9 @@ function openContact(id) {
     ['E-posta', c.email && (mailOk ? `<a href="mailto:${esc(c.email)}">${esc(c.email)}</a>` : esc(c.email))],
     ['Web', c.web && (normalizeUrl(c.web) ? `<a href="${esc(normalizeUrl(c.web))}" target="_blank" rel="noopener noreferrer">${esc(c.web)}</a>` : esc(c.web))],
     ['LinkedIn', c.linkedin && (linkedinUrl(c.linkedin) ? `<a href="${esc(linkedinUrl(c.linkedin))}" target="_blank" rel="noopener noreferrer">${esc(c.linkedin)}</a>` : esc(c.linkedin))],
+    ['WhatsApp', c.whatsapp && (whatsappIsNumber(c.whatsapp) ? `<a href="https://wa.me/${esc(whatsappNumber(c.whatsapp))}" target="_blank" rel="noopener noreferrer">${esc(c.whatsapp)}</a>` : esc(c.whatsapp))],
     ['Adres', c.address && esc(c.address)],
+    ['Konum', loc && (map ? `<a href="${esc(map)}" target="_blank" rel="noopener noreferrer">📍 ${esc(loc)}</a>` : esc(loc))],
     ['Etkinlik', ev ? esc(ev.name) : ''],
     ['Tarih', esc(formatDateTR(c.createdAt))],
     ['Etiketler', (c.tags || []).map(t => `<span class="badge primary">${esc(t)}</span>`).join(' ')],
@@ -666,6 +673,7 @@ function contactForm(c, { title = 'Yeni kişi', ocrText = '', quick = false } = 
       <div class="grid2">${f('firstName', 'Ad', 'text', 'autocapitalize="words" enterkeyhint="next"')}${f('lastName', 'Soyad', 'text', 'autocapitalize="words"')}</div>
       ${f('phoneMobile', 'Cep telefonu', 'tel', 'inputmode="tel"')}
       ${f('email', 'E-posta', 'email', 'autocapitalize="off" inputmode="email"')}
+      ${f('whatsapp', 'WhatsApp', 'text', 'autocapitalize="off" placeholder="Numara veya kullanıcı adı"')}
       <details class="more" ${moreOpen ? 'open' : ''}><summary>＋ Diğer alanlar (unvan, şirket, web…)</summary>
         ${f('title', 'Unvan')}
         ${f('company', 'Şirket')}
@@ -679,6 +687,10 @@ function contactForm(c, { title = 'Yeni kişi', ocrText = '', quick = false } = 
           <button type="button" class="btn sm danger" data-act="remove-image" data-target="contact">Kaldır</button></div></div>
       </details>
       <div class="section-title">Etkinlik ve takip</div>
+      <div class="field"><span>Konum</span>
+        <input class="input" name="location" value="${esc(c.location || '')}" placeholder="ör. Kadıköy, İstanbul">
+        <div class="row" style="margin-top:8px"><button type="button" class="btn sm" style="flex:0 0 auto;white-space:nowrap" data-act="geo">📍 Bulunduğum yeri ekle</button>
+          <span id="geoInfo" class="muted small">${c.geo ? esc(`${(+c.geo.lat).toFixed(5)}, ${(+c.geo.lon).toFixed(5)}`) + ' <button type="button" class="btn sm ghost" data-act="geo-clear">✕</button>' : ''}</span></div></div>
       <label class="field"><span>Tanışılan etkinlik</span><select class="input" name="eventId"><option value="">— Yok —</option>${evOpts}</select></label>
       <div class="field"><span>Etiketler</span><div class="chips wrap" id="tagChips">
         ${allTags.map(t => `<button type="button" class="chip ${(c.tags || []).includes(t) ? 'on' : ''}" data-act="toggle-tag" data-tag="${esc(t)}">${esc(t)}</button>`).join('')}
@@ -721,7 +733,7 @@ function findDuplicate(c) {
 }
 
 function mergeInto(target, src) {
-  const fields = ['firstName', 'lastName', 'title', 'company', 'phoneMobile', 'phoneWork', 'email', 'web', 'linkedin', 'address', 'photo', 'cardImage', 'cardThumb', 'eventId'];
+  const fields = ['firstName', 'lastName', 'title', 'company', 'phoneMobile', 'phoneWork', 'email', 'web', 'linkedin', 'address', 'photo', 'cardImage', 'cardThumb', 'eventId', 'whatsapp', 'location', 'geo'];
   for (const k of fields) if (!target[k] && src[k]) target[k] = src[k];
   target.tags = [...new Set([...(target.tags || []), ...(src.tags || [])])];
   if (src.note && !(target.note || '').includes(src.note)) target.note = [target.note, src.note].filter(Boolean).join('\n');
@@ -1139,9 +1151,9 @@ function csvCell(v) {
   return /[;"\n\r,]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 export function buildCSV(contacts, evName) {
-  const head = ['Ad', 'Soyad', 'Unvan', 'Şirket', 'Cep Telefonu', 'İş Telefonu', 'E-posta', 'Web', 'LinkedIn', 'Adres', 'Etkinlik', 'Tanışma Tarihi', 'Etiketler', 'Öncelik', 'Not', 'Takip Tarihi', 'Rehberde'];
+  const head = ['Ad', 'Soyad', 'Unvan', 'Şirket', 'Cep Telefonu', 'İş Telefonu', 'E-posta', 'Web', 'LinkedIn', 'WhatsApp', 'Adres', 'Konum', 'Etkinlik', 'Tanışma Tarihi', 'Etiketler', 'Öncelik', 'Not', 'Takip Tarihi', 'Rehberde'];
   const rows = contacts.slice().sort((a, b) => b.createdAt - a.createdAt).map(c => [
-    c.firstName, c.lastName, c.title, c.company, c.phoneMobile, c.phoneWork, c.email, c.web, c.linkedin, c.address,
+    c.firstName, c.lastName, c.title, c.company, c.phoneMobile, c.phoneWork, c.email, c.web, c.linkedin, c.whatsapp, c.address, locationText(c),
     evName(c.eventId), formatDateTR(c.createdAt), (c.tags || []).join(', '), PRIORITIES[c.priority] || '', c.note,
     c.followUpAt ? formatDateTR(c.followUpAt) : '', c.inContacts ? 'Evet' : 'Hayır'
   ]);
@@ -1296,6 +1308,22 @@ const actions = {
   'set-prio': el => { $('#layers [data-sheet="cform"]')._data.priority = el.dataset.v; $$('#prioSeg button').forEach(b => b.classList.toggle('on', b === el)); },
   'set-fu-form': el => { $('#layers [data-sheet="cform"]')._data._fuDays = +el.dataset.v; $$('#fuSeg button').forEach(b => b.classList.toggle('on', b === el)); },
   'save-contact': () => saveContact(),
+  'geo': el => {
+    if (!navigator.geolocation) { toast('Bu cihazda konum desteklenmiyor'); return; }
+    const info = $('#geoInfo');
+    info.textContent = 'Konum alınıyor…';
+    // Konum sadece telefonda işlenir; adres bulma için hiçbir servise gönderilmez
+    navigator.geolocation.getCurrentPosition(pos => {
+      const layer = $('#layers [data-sheet="cform"]');
+      if (!layer) return;
+      layer._data.geo = { lat: +pos.coords.latitude.toFixed(5), lon: +pos.coords.longitude.toFixed(5), acc: Math.round(pos.coords.accuracy), at: Date.now() };
+      info.innerHTML = `${esc(`${layer._data.geo.lat}, ${layer._data.geo.lon}`)} (±${layer._data.geo.acc} m) <button type="button" class="btn sm ghost" data-act="geo-clear">✕</button>`;
+      toast('Konum eklendi 📍');
+    }, err => {
+      info.textContent = err.code === 1 ? 'Konum izni verilmedi. iPhone Ayarlar → Gizlilik → Konum Servisleri → Safari Web Siteleri → "Kullanırken"' : 'Konum alınamadı';
+    }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 });
+  },
+  'geo-clear': () => { const l = $('#layers [data-sheet="cform"]'); if (l) l._data.geo = null; $('#geoInfo').textContent = ''; },
   // Kişi detayı
   'open-contact': el => openContact(el.dataset.id),
   'to-phone': el => addContactsToPhone([state.contacts.find(c => c.id === el.dataset.id)]),
